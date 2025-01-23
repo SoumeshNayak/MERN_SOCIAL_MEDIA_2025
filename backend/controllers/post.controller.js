@@ -65,6 +65,9 @@ export const likeUnlikePost=async(req,res)=>{
         //Already liked so dislike it
         await Post.updateOne({_id:id},{$pull:{likes:userId}});
         await User.updateOne({_id:userId},{$pull:{likedPost: id}})
+
+        const updatedLikes=post.likes.filter((id)=>id.toString()!==userId.toString())
+        res.status(200).json(updatedLikes)
     }else{
         // Like the post
         post.likes.push(userId);
