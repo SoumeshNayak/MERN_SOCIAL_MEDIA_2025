@@ -11,8 +11,11 @@ import { FaArrowLeft } from "react-icons/fa6";
 import { IoCalendarOutline } from "react-icons/io5";
 import { FaLink } from "react-icons/fa";
 import { MdEdit } from "react-icons/md";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatMemberSinceDate } from "../../utils/date";
+import useFollow from "../../hooks/useFollow";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
+import toast from "react-hot-toast";
 
 const ProfilePage = () => {
 	const [coverImg, setCoverImg] = useState(null);
@@ -23,7 +26,7 @@ const ProfilePage = () => {
 	const profileImgRef = useRef(null);
 
 	
-	const isMyProfile = true;
+	
 	const {username}=useParams()
 
 	// const user = {
@@ -37,6 +40,8 @@ const ProfilePage = () => {
 	// 	following: ["1", "2", "3"],
 	// 	followers: ["1", "2", "3"],
 	// };
+	
+	const {follow,isPending}=useFollow()
 	const queryClient=useQueryClient();
 	const {data:user,isLoading,refetch,isRefetching}=useQuery({
 		queryKey:["userProfile"],
@@ -55,7 +60,38 @@ const ProfilePage = () => {
 		
 	})
 
+	const {mutate:updateProfile,isPending:updatingProfile}=useMutation({
+		mutationFn:async()=>{
+			try {
+				const res=await fetch("/api/users/update",{
+					method:"POST",
+					headers:{
+						"Content-Type":"application/json"
+					},
+					body:JSON.stringify({coverImg,profileImg})
+				})
+				const data=await res.json();
+				if(!res.ok){
+					throw new Error(data.error || "Somethong went wrong")
+				}
+				return data
+			} catch (error) {
+				throw new Error(error.message)
+			}
+		},
+		onSuccess:()=>{
+			toast.success("profile update successfully")
+			Promise.all([
+				queryClient.invalidateQueries({queryKey:["authUser"]}),
+				queryClient.invalidateQueries({queryKey:["userProfile"]}),
+			])
+		}
+	})
 
+
+
+	const {data:authUser}=useQuery({queryKey:["authUser"]})
+	const isMyProfile = authUser._id === user?._id;
 
 	useEffect(()=>{
 		refetch()
@@ -139,17 +175,18 @@ const ProfilePage = () => {
 								{!isMyProfile && (
 									<button
 										className='btn btn-outline rounded-full btn-sm'
-										onClick={() => alert("Followed successfully")}
+										onClick={() =>{follow(user?._id)}}
 									>
-										Follow
+										{isPending && <LoadingSpinner size="sm"/>}
+										{!isPending && user?.followers.includes(authUser._id)?"Unfollow":"Follow"}
 									</button>
 								)}
 								{(coverImg || profileImg) && (
 									<button
 										className='btn btn-primary rounded-full btn-sm text-white px-4 ml-2'
-										onClick={() => alert("Profile updated successfully")}
+										onClick={() => updateProfile()}
 									>
-										Update
+										{updatingProfile ? "Updaing..":"save"}
 									</button>
 								)}
 							</div>
@@ -167,12 +204,12 @@ const ProfilePage = () => {
 											<>
 												<FaLink className='w-3 h-3 text-slate-500' />
 												<a
-													href='https://youtube.com/@asaprogrammer_'
+													href={user?.link}
 													target='_blank'
 													rel='noreferrer'
 													className='text-sm text-blue-500 hover:underline'
 												>
-													youtube.com/@asaprogrammer_
+													{user?.link}
 												</a>
 											</>
 										</div>
